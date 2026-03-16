@@ -1062,6 +1062,67 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 .toast-close:hover { color: white; }
 
+/* ---- Email Reminders ---- */
+.reminder-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.reminder-section h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.reminder-description {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.reminder-section form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reminder-section .text-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--white);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+  appearance: none;
+}
+
+.reminder-section .text-input:focus {
+  border-color: var(--primary);
+}
+
+.reminder-active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--green-light);
+  border: 1px solid #86efac;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text);
+}
+
 /* ---- Mobile ---- */
 @media (max-width: 480px) {
   .screen-header h1 { font-size: 24px; }

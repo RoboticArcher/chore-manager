@@ -24,12 +24,52 @@ function ChoreRow({ chore, done, onToggle }) {
   );
 }
 
-export default function CalendarView({ chores, schedules, completions, onToggleComplete, onBack }) {
+export default function CalendarView({ chores, schedules, completions, onToggleComplete, onBack, reminderEmail, onSetReminderEmail }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState(null);
   const [showExportPanel, setShowExportPanel] = useState(false);
+
+  // Email reminder form state
+  const [emailInput, setEmailInput] = useState("");
+  const [timezoneInput, setTimezoneInput] = useState(
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"
+  );
+  const [subscribeStatus, setSubscribeStatus] = useState("idle"); // "idle" | "loading" | "error"
+
+  async function handleSubscribe(e) {
+    e.preventDefault();
+    setSubscribeStatus("loading");
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: emailInput,
+          timezone: timezoneInput,
+          chores,
+          schedules,
+        }),
+      });
+      if (!res.ok) throw new Error("Server error");
+      onSetReminderEmail(emailInput);
+      setSubscribeStatus("idle");
+    } catch {
+      setSubscribeStatus("error");
+    }
+  }
+
+  async function handleUnsubscribe() {
+    if (!reminderEmail) return;
+    // In-app removal — no HMAC token needed (user is present)
+    try {
+      await fetch(`/api/unsubscribe?email=${encodeURIComponent(reminderEmail)}`);
+    } catch {
+      // Ignore — clear locally regardless
+    }
+    onSetReminderEmail(null);
+  }
 
   const calMap = buildCalendarMap(chores, schedules, viewYear, viewMonth);
 
@@ -218,8 +258,51 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
               <p><strong>Apple Calendar:</strong> Double-click the downloaded file to import.</p>
               <p><strong>Google Calendar:</strong> Go to Settings → Import &amp; Export → Import.</p>
             </div>
-            <div className="coming-soon">
-              <p>🔔 <strong>Email reminders</strong> — coming soon. We'll send you a morning reminder on each chore day.</p>
+            <div className="reminder-section">
+              <h4>🔔 Morning Reminders</h4>
+              {reminderEmail ? (
+                <div className="reminder-active">
+                  <span>Reminders active for <strong>{reminderEmail}</strong></span>
+                  <button className="btn-ghost small" onClick={handleUnsubscribe}>
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubscribe}>
+                  <p className="reminder-description">Get a morning email on days you have chores scheduled.</p>
+                  <input
+                    type="email"
+                    className="text-input"
+                    placeholder="your@email.com"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    required
+                  />
+                  <select
+                    className="text-input"
+                    value={timezoneInput}
+                    onChange={(e) => setTimezoneInput(e.target.value)}
+                  >
+                    <option value="America/New_York">Eastern (ET)</option>
+                    <option value="America/Chicago">Central (CT)</option>
+                    <option value="America/Denver">Mountain (MT)</option>
+                    <option value="America/Los_Angeles">Pacific (PT)</option>
+                    <option value="America/Anchorage">Alaska (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                  <button
+                    type="submit"
+                    className="btn-primary full-width"
+                    disabled={subscribeStatus === "loading"}
+                  >
+                    {subscribeStatus === "loading" ? "Saving..." : "Enable reminders"}
+                  </button>
+                  {subscribeStatus === "error" && (
+                    <p className="custom-form-error">Something went wrong. Please try again.</p>
+                  )}
+                </form>
+              )}
             </div>
             <button className="btn-ghost full-width" onClick={() => setShowExportPanel(false)}>Close</button>
           </div>

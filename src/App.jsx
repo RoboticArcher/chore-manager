@@ -38,6 +38,11 @@ export default function App() {
     loadFromStorage("chore-completions", {})
   );
 
+  // Email reminder subscription (null = not subscribed)
+  const [reminderEmail, setReminderEmail] = useState(() =>
+    loadFromStorage("reminder-email", null)
+  );
+
   // Toast state for undo notifications
   const [toast, setToast] = useState(null); // { message, onUndo }
 
@@ -46,6 +51,22 @@ export default function App() {
   useEffect(() => { localStorage.setItem("chore-custom", JSON.stringify(customChores)); }, [customChores]);
   useEffect(() => { localStorage.setItem("chore-schedules", JSON.stringify(schedules)); }, [schedules]);
   useEffect(() => { localStorage.setItem("chore-completions", JSON.stringify(completions)); }, [completions]);
+  useEffect(() => { localStorage.setItem("reminder-email", JSON.stringify(reminderEmail)); }, [reminderEmail]);
+
+  // Auto-sync schedule to server whenever chores/schedules change (if reminders are active)
+  useEffect(() => {
+    if (!reminderEmail) return;
+    fetch("/api/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: reminderEmail,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        chores: selectedChores,
+        schedules,
+      }),
+    }).catch(() => {}); // Silent — app works fine without server sync
+  }, [selectedChores, schedules]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-dismiss toast after 5 seconds
   useEffect(() => {
@@ -199,6 +220,8 @@ export default function App() {
           completions={completions}
           onToggleComplete={handleToggleComplete}
           onBack={() => setStep("schedule")}
+          reminderEmail={reminderEmail}
+          onSetReminderEmail={setReminderEmail}
         />
       )}
 

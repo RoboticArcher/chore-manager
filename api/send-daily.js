@@ -18,8 +18,25 @@ function getTodayInTz(timezone) {
   try {
     return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
   } catch {
-    // Fall back to UTC if timezone is invalid
     return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(new Date());
+  }
+}
+
+/**
+ * Get the current hour (0–23) in a given IANA timezone.
+ */
+function getCurrentHourInTz(timezone) {
+  try {
+    const hourStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      hour12: false,
+    }).format(new Date());
+    const h = parseInt(hourStr, 10);
+    // Intl returns "24" for midnight in some environments — normalize to 0
+    return h === 24 ? 0 : h;
+  } catch {
+    return new Date().getUTCHours();
   }
 }
 
@@ -87,7 +104,17 @@ export default async function handler(req, res) {
         if (!subscriber || !subscriber.email) return;
 
         try {
-          const todayStr = getTodayInTz(subscriber.timezone);
+          const timezone = subscriber.timezone || "America/New_York";
+          const preferredHour = subscriber.reminderHour ?? 8;
+
+          // Only send if the current hour in their timezone matches their preferred time
+          const currentHour = getCurrentHourInTz(timezone);
+          if (currentHour !== preferredHour) {
+            skipped++;
+            return;
+          }
+
+          const todayStr = getTodayInTz(timezone);
           const [year, month] = todayStr.split("-").map(Number);
 
           const calMap = buildCalendarMap(

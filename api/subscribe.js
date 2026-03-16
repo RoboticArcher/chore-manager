@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { email, timezone, chores, schedules } = req.body || {};
+  const { email, timezone, reminderHour, chores, schedules } = req.body || {};
 
   // Basic validation
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -21,6 +21,7 @@ export default async function handler(req, res) {
     await redis.set(`subscriber:${email}`, {
       email,
       timezone: timezone || "America/New_York",
+      reminderHour: typeof reminderHour === "number" ? reminderHour : 8,
       chores,
       schedules: schedules || {},
       updatedAt: Date.now(),

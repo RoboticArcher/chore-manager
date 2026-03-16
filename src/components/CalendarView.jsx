@@ -24,19 +24,31 @@ function ChoreRow({ chore, done, onToggle }) {
   );
 }
 
-export default function CalendarView({ chores, schedules, completions, onToggleComplete, onBack, reminderEmail, onSetReminderEmail }) {
+const REMINDER_TIMES = [
+  { label: "6:00 AM", hour: 6 },
+  { label: "7:00 AM", hour: 7 },
+  { label: "8:00 AM", hour: 8 },
+  { label: "9:00 AM", hour: 9 },
+  { label: "10:00 AM", hour: 10 },
+  { label: "12:00 PM", hour: 12 },
+];
+
+export default function CalendarView({ chores, schedules, completions, onToggleComplete, onBack, reminderEmail, onSetReminderEmail, reminderHour, onSetReminderHour }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState(null);
   const [showExportPanel, setShowExportPanel] = useState(false);
+  const [showReminderPanel, setShowReminderPanel] = useState(false);
 
   // Email reminder form state
   const [emailInput, setEmailInput] = useState("");
   const [timezoneInput, setTimezoneInput] = useState(
     Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"
   );
+  const [hourInput, setHourInput] = useState(reminderHour ?? 8);
   const [subscribeStatus, setSubscribeStatus] = useState("idle"); // "idle" | "loading" | "error"
+  const [updateStatus, setUpdateStatus] = useState("idle"); // for updating time when already subscribed
 
   async function handleSubscribe(e) {
     e.preventDefault();
@@ -48,15 +60,42 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
         body: JSON.stringify({
           email: emailInput,
           timezone: timezoneInput,
+          reminderHour: hourInput,
           chores,
           schedules,
         }),
       });
       if (!res.ok) throw new Error("Server error");
       onSetReminderEmail(emailInput);
+      onSetReminderHour(hourInput);
       setSubscribeStatus("idle");
     } catch {
       setSubscribeStatus("error");
+    }
+  }
+
+  async function handleUpdateTime(newHour) {
+    setHourInput(newHour);
+    if (!reminderEmail) return;
+    setUpdateStatus("saving");
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: reminderEmail,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          reminderHour: newHour,
+          chores,
+          schedules,
+        }),
+      });
+      if (!res.ok) throw new Error("Server error");
+      onSetReminderHour(newHour);
+      setUpdateStatus("saved");
+      setTimeout(() => setUpdateStatus("idle"), 2000);
+    } catch {
+      setUpdateStatus("error");
     }
   }
 
@@ -140,6 +179,9 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
                 ← Today
               </button>
             )}
+            <button className="export-btn" onClick={() => setShowReminderPanel(true)} title="Email reminders">
+              🔔{reminderEmail ? <span className="reminder-active-dot" /> : null}
+            </button>
             <button className="export-btn" onClick={() => setShowExportPanel(true)}>
               Export ↗
             </button>
@@ -258,53 +300,98 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
               <p><strong>Apple Calendar:</strong> Double-click the downloaded file to import.</p>
               <p><strong>Google Calendar:</strong> Go to Settings → Import &amp; Export → Import.</p>
             </div>
-            <div className="reminder-section">
-              <h4>🔔 Morning Reminders</h4>
-              {reminderEmail ? (
-                <div className="reminder-active">
-                  <span>Reminders active for <strong>{reminderEmail}</strong></span>
-                  <button className="btn-ghost small" onClick={handleUnsubscribe}>
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleSubscribe}>
-                  <p className="reminder-description">Get a morning email on days you have chores scheduled.</p>
-                  <input
-                    type="email"
-                    className="text-input"
-                    placeholder="your@email.com"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    required
-                  />
-                  <select
-                    className="text-input"
-                    value={timezoneInput}
-                    onChange={(e) => setTimezoneInput(e.target.value)}
-                  >
-                    <option value="America/New_York">Eastern (ET)</option>
-                    <option value="America/Chicago">Central (CT)</option>
-                    <option value="America/Denver">Mountain (MT)</option>
-                    <option value="America/Los_Angeles">Pacific (PT)</option>
-                    <option value="America/Anchorage">Alaska (AKT)</option>
-                    <option value="Pacific/Honolulu">Hawaii (HST)</option>
-                    <option value="UTC">UTC</option>
-                  </select>
-                  <button
-                    type="submit"
-                    className="btn-primary full-width"
-                    disabled={subscribeStatus === "loading"}
-                  >
-                    {subscribeStatus === "loading" ? "Saving..." : "Enable reminders"}
-                  </button>
-                  {subscribeStatus === "error" && (
-                    <p className="custom-form-error">Something went wrong. Please try again.</p>
-                  )}
-                </form>
-              )}
-            </div>
             <button className="btn-ghost full-width" onClick={() => setShowExportPanel(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Reminders modal */}
+      {showReminderPanel && (
+        <div className="modal-overlay" onClick={() => setShowReminderPanel(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>🔔 Morning Reminders</h3>
+            {reminderEmail ? (
+              <>
+                <div className="reminder-active-block">
+                  <div className="reminder-active-email">
+                    <span className="reminder-check">✓</span>
+                    <span>Reminders on for <strong>{reminderEmail}</strong></span>
+                  </div>
+                </div>
+                <div className="reminder-time-section">
+                  <label className="reminder-time-label">Send reminder at:</label>
+                  <div className="reminder-time-grid">
+                    {REMINDER_TIMES.map(({ label, hour }) => (
+                      <button
+                        key={hour}
+                        className={`time-chip ${(reminderHour ?? 8) === hour ? "selected" : ""}`}
+                        onClick={() => handleUpdateTime(hour)}
+                        disabled={updateStatus === "saving"}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {updateStatus === "saved" && <p className="reminder-saved">✓ Saved</p>}
+                  {updateStatus === "error" && <p className="custom-form-error">Failed to save. Try again.</p>}
+                </div>
+                <button className="btn-ghost full-width" style={{ color: "var(--red)" }} onClick={handleUnsubscribe}>
+                  Turn off reminders
+                </button>
+              </>
+            ) : (
+              <form onSubmit={handleSubscribe}>
+                <p className="reminder-description">Get an email on days you have chores scheduled.</p>
+                <label className="reminder-field-label">Email</label>
+                <input
+                  type="email"
+                  className="text-input"
+                  placeholder="your@email.com"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  required
+                />
+                <label className="reminder-field-label">Timezone</label>
+                <select
+                  className="text-input"
+                  value={timezoneInput}
+                  onChange={(e) => setTimezoneInput(e.target.value)}
+                >
+                  <option value="America/New_York">Eastern (ET)</option>
+                  <option value="America/Chicago">Central (CT)</option>
+                  <option value="America/Denver">Mountain (MT)</option>
+                  <option value="America/Los_Angeles">Pacific (PT)</option>
+                  <option value="America/Anchorage">Alaska (AKT)</option>
+                  <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                  <option value="UTC">UTC</option>
+                </select>
+                <label className="reminder-field-label">Send at</label>
+                <div className="reminder-time-grid">
+                  {REMINDER_TIMES.map(({ label, hour }) => (
+                    <button
+                      type="button"
+                      key={hour}
+                      className={`time-chip ${hourInput === hour ? "selected" : ""}`}
+                      onClick={() => setHourInput(hour)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="submit"
+                  className="btn-primary full-width"
+                  disabled={subscribeStatus === "loading"}
+                  style={{ marginTop: 8 }}
+                >
+                  {subscribeStatus === "loading" ? "Saving..." : "Enable reminders"}
+                </button>
+                {subscribeStatus === "error" && (
+                  <p className="custom-form-error">Something went wrong. Please try again.</p>
+                )}
+              </form>
+            )}
+            <button className="btn-ghost full-width" onClick={() => setShowReminderPanel(false)} style={{ marginTop: 8 }}>Close</button>
           </div>
         </div>
       )}

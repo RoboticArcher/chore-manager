@@ -42,6 +42,10 @@ export default function App() {
   const [reminderEmail, setReminderEmail] = useState(() =>
     loadFromStorage("reminder-email", null)
   );
+  // Hour of day to send the reminder (0–23, default 8 = 8am)
+  const [reminderHour, setReminderHour] = useState(() =>
+    loadFromStorage("reminder-hour", 8)
+  );
 
   // Toast state for undo notifications
   const [toast, setToast] = useState(null); // { message, onUndo }
@@ -52,6 +56,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem("chore-schedules", JSON.stringify(schedules)); }, [schedules]);
   useEffect(() => { localStorage.setItem("chore-completions", JSON.stringify(completions)); }, [completions]);
   useEffect(() => { localStorage.setItem("reminder-email", JSON.stringify(reminderEmail)); }, [reminderEmail]);
+  useEffect(() => { localStorage.setItem("reminder-hour", JSON.stringify(reminderHour)); }, [reminderHour]);
 
   // Auto-sync schedule to server whenever chores/schedules change (if reminders are active)
   useEffect(() => {
@@ -62,6 +67,7 @@ export default function App() {
       body: JSON.stringify({
         email: reminderEmail,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        reminderHour,
         chores: selectedChores,
         schedules,
       }),
@@ -222,6 +228,8 @@ export default function App() {
           onBack={() => setStep("schedule")}
           reminderEmail={reminderEmail}
           onSetReminderEmail={setReminderEmail}
+          reminderHour={reminderHour}
+          onSetReminderHour={setReminderHour}
         />
       )}
 

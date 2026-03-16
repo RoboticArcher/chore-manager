@@ -44,7 +44,9 @@ export function getChoreOccurrencesForMonth(schedule, year, month) {
 
   if (frequency === "monthly") {
     const dom = dayOfMonth ?? 1;
-    const d = new Date(year, month, dom);
+    // Clamp to last day of month (e.g. day 31 in a 30-day month → day 30)
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const d = new Date(year, month, Math.min(dom, daysInMonth));
     if (d >= start && d <= lastDay) occurrences.push(d);
   }
 
@@ -52,7 +54,9 @@ export function getChoreOccurrencesForMonth(schedule, year, month) {
     const dom = dayOfMonth ?? 1;
     const monthDiff = (year - start.getFullYear()) * 12 + (month - start.getMonth());
     if (monthDiff >= 0 && monthDiff % 3 === 0) {
-      const d = new Date(year, month, dom);
+      // Clamp to last day of month so e.g. "31st" in April becomes April 30
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const d = new Date(year, month, Math.min(dom, daysInMonth));
       if (d >= start && d <= lastDay) occurrences.push(d);
     }
   }
@@ -61,7 +65,9 @@ export function getChoreOccurrencesForMonth(schedule, year, month) {
     const targetMonth = schedule.month ?? 0;
     const dom = dayOfMonth ?? 1;
     if (month === targetMonth) {
-      const d = new Date(year, month, dom);
+      // Clamp to last day of month
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const d = new Date(year, month, Math.min(dom, daysInMonth));
       if (d >= start && d <= lastDay) occurrences.push(d);
     }
   }

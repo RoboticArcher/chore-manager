@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { buildCalendarMap, dateKey } from "../utils/scheduleUtils";
 import { downloadICS } from "../utils/icsExport";
 
@@ -33,7 +33,7 @@ const REMINDER_TIMES = [
   { label: "12:00 PM", hour: 12 },
 ];
 
-export default function CalendarView({ chores, schedules, completions, onToggleComplete, onBack, reminderEmail, onSetReminderEmail, reminderHour, onSetReminderHour }) {
+export default function CalendarView({ chores, schedules, completions, onToggleComplete, onBack, reminderEmail, onSetReminderEmail, reminderHour, onSetReminderHour, reminderTimezone, onSetReminderTimezone }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -43,12 +43,16 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
 
   // Email reminder form state
   const [emailInput, setEmailInput] = useState("");
+  // Initialize timezone from saved preference (falls back to device timezone)
   const [timezoneInput, setTimezoneInput] = useState(
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"
+    reminderTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"
   );
   const [hourInput, setHourInput] = useState(reminderHour ?? 8);
   const [subscribeStatus, setSubscribeStatus] = useState("idle"); // "idle" | "loading" | "error"
   const [updateStatus, setUpdateStatus] = useState("idle"); // for updating time when already subscribed
+
+  // Keep hourInput in sync if parent changes reminderHour (e.g. from another session)
+  useEffect(() => { setHourInput(reminderHour ?? 8); }, [reminderHour]);
 
   async function handleSubscribe(e) {
     e.preventDefault();
@@ -68,6 +72,7 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
       if (!res.ok) throw new Error("Server error");
       onSetReminderEmail(emailInput);
       onSetReminderHour(hourInput);
+      onSetReminderTimezone(timezoneInput); // persist timezone selection
       setSubscribeStatus("idle");
     } catch {
       setSubscribeStatus("error");
@@ -110,7 +115,11 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
     onSetReminderEmail(null);
   }
 
-  const calMap = buildCalendarMap(chores, schedules, viewYear, viewMonth);
+  // Memoized — only recomputes when chores/schedules/month change, not on every completion toggle
+  const calMap = useMemo(
+    () => buildCalendarMap(chores, schedules, viewYear, viewMonth),
+    [chores, schedules, viewYear, viewMonth]
+  );
 
   const firstOfMonth = new Date(viewYear, viewMonth, 1);
   const startPadding = firstOfMonth.getDay();

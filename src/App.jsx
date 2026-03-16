@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ChoreLibrary from "./components/ChoreLibrary";
 import ScheduleSetup from "./components/ScheduleSetup";
 import CalendarView from "./components/CalendarView";
@@ -12,6 +12,17 @@ function loadFromStorage(key, fallback) {
     return val ? JSON.parse(val) : fallback;
   } catch {
     return fallback;
+  }
+}
+
+// Wraps localStorage.setItem with QuotaExceededError handling
+function saveToStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    if (e && (e.name === "QuotaExceededError" || e.code === 22)) {
+      console.warn("localStorage is full — some data may not have saved.");
+    }
   }
 }
 
@@ -38,41 +49,53 @@ export default function App() {
     loadFromStorage("chore-completions", {})
   );
 
-  // Email reminder subscription (null = not subscribed)
+  // Email reminder settings
   const [reminderEmail, setReminderEmail] = useState(() =>
     loadFromStorage("reminder-email", null)
   );
-  // Hour of day to send the reminder (0–23, default 8 = 8am)
   const [reminderHour, setReminderHour] = useState(() =>
     loadFromStorage("reminder-hour", 8)
+  );
+  const [reminderTimezone, setReminderTimezone] = useState(() =>
+    loadFromStorage("reminder-timezone",
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"
+    )
   );
 
   // Toast state for undo notifications
   const [toast, setToast] = useState(null); // { message, onUndo }
 
-  useEffect(() => { localStorage.setItem("chore-step", JSON.stringify(step)); }, [step]);
-  useEffect(() => { localStorage.setItem("chore-selected", JSON.stringify(selectedChores)); }, [selectedChores]);
-  useEffect(() => { localStorage.setItem("chore-custom", JSON.stringify(customChores)); }, [customChores]);
-  useEffect(() => { localStorage.setItem("chore-schedules", JSON.stringify(schedules)); }, [schedules]);
-  useEffect(() => { localStorage.setItem("chore-completions", JSON.stringify(completions)); }, [completions]);
-  useEffect(() => { localStorage.setItem("reminder-email", JSON.stringify(reminderEmail)); }, [reminderEmail]);
-  useEffect(() => { localStorage.setItem("reminder-hour", JSON.stringify(reminderHour)); }, [reminderHour]);
+  // Persist all state to localStorage
+  useEffect(() => { saveToStorage("chore-step", step); }, [step]);
+  useEffect(() => { saveToStorage("chore-selected", selectedChores); }, [selectedChores]);
+  useEffect(() => { saveToStorage("chore-custom", customChores); }, [customChores]);
+  useEffect(() => { saveToStorage("chore-schedules", schedules); }, [schedules]);
+  useEffect(() => { saveToStorage("chore-completions", completions); }, [completions]);
+  useEffect(() => { saveToStorage("reminder-email", reminderEmail); }, [reminderEmail]);
+  useEffect(() => { saveToStorage("reminder-hour", reminderHour); }, [reminderHour]);
+  useEffect(() => { saveToStorage("reminder-timezone", reminderTimezone); }, [reminderTimezone]);
 
-  // Auto-sync schedule to server whenever chores/schedules change (if reminders are active)
+  // Auto-sync schedule to server when chores or schedules change (if reminders active).
+  // Debounced 1.5s to avoid hammering the API on rapid changes.
+  const syncTimer = useRef(null);
   useEffect(() => {
     if (!reminderEmail) return;
-    fetch("/api/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: reminderEmail,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        reminderHour,
-        chores: selectedChores,
-        schedules,
-      }),
-    }).catch(() => {}); // Silent — app works fine without server sync
-  }, [selectedChores, schedules]); // eslint-disable-line react-hooks/exhaustive-deps
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: reminderEmail,
+          timezone: reminderTimezone,
+          reminderHour,
+          chores: selectedChores,
+          schedules,
+        }),
+      }).catch(() => {}); // Silent — local app still works
+    }, 1500);
+    return () => clearTimeout(syncTimer.current);
+  }, [selectedChores, schedules, reminderHour, reminderTimezone, reminderEmail]);
 
   // Auto-dismiss toast after 5 seconds
   useEffect(() => {
@@ -230,6 +253,8 @@ export default function App() {
           onSetReminderEmail={setReminderEmail}
           reminderHour={reminderHour}
           onSetReminderHour={setReminderHour}
+          reminderTimezone={reminderTimezone}
+          onSetReminderTimezone={setReminderTimezone}
         />
       )}
 

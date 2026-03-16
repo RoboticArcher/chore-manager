@@ -160,7 +160,7 @@ export default function ChoreLibrary({
       {/* Add Custom Chore */}
       <div className="custom-chore-section">
         {!showCustomForm ? (
-          <button className="add-custom-btn" onClick={() => setShowCustomForm(true)}>
+          <button className="add-custom-btn" onClick={() => { setShowCustomForm(true); setCustomError(""); }}>
             + Add a custom chore
           </button>
         ) : (

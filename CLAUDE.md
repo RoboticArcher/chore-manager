@@ -40,8 +40,15 @@ npm run build   # Production build
 npm run preview # Preview production build
 ```
 
+## Completion Tracking
+- `completions` state in `App.jsx`: `{ "YYYY-MM-DD:choreId": true }`
+- localStorage key: `chore-completions`
+- Handler: `handleToggleComplete(dayKey, choreId)` — toggled via CalendarView
+- Today's Chores panel shows progress bar + celebration state when all done
+- Calendar dots turn green when completed; full day cell turns green when all done
+
 ## Planned / Not Yet Built
 - Email reminders (needs Vercel serverless function + email service like Resend)
 - Live Google Calendar sync (needs OAuth backend)
-- Chore completion tracking / streaks
+- Streak tracking / history
 - Multiple household members / assignment

@@ -204,13 +204,30 @@ function ScheduleCard({ chore, schedule, completions, onChange }) {
 
           {/* Start date */}
           <div className="refine-section">
-            <label>Start date</label>
+            <label>Start date <span className="label-hint">use the calendar picker</span></label>
             <input
               type="date"
               className="date-input"
               value={schedule?.startDate || new Date().toISOString().split("T")[0]}
-              onChange={(e) => update({ startDate: e.target.value })}
+              onChange={(e) => {
+                const val = e.target.value;
+                // Only save when value is a valid YYYY-MM-DD (prevents malformed keyboard entry)
+                if (/^\d{4}-\d{2}-\d{2}$/.test(val)) update({ startDate: val });
+              }}
             />
+          </div>
+
+          {/* Notes */}
+          <div className="refine-section">
+            <label>Notes <span className="label-hint">optional · max 100 chars</span></label>
+            <textarea
+              className="notes-input"
+              maxLength={100}
+              placeholder="Any details about this chore..."
+              value={schedule?.notes || ""}
+              onChange={(e) => update({ notes: e.target.value })}
+            />
+            <div className="notes-counter">{(schedule?.notes || "").length}/100</div>
           </div>
         </div>
       )}

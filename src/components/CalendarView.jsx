@@ -8,7 +8,7 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-function ChoreRow({ chore, done, onToggle }) {
+function ChoreRow({ chore, done, onToggle, note }) {
   return (
     <li className={`chore-row ${done ? "done" : ""}`} onClick={onToggle}>
       <button
@@ -19,7 +19,10 @@ function ChoreRow({ chore, done, onToggle }) {
         {done ? "✓" : ""}
       </button>
       <span className="chore-emoji-lg">{chore.emoji}</span>
-      <span className="chore-name">{chore.name}</span>
+      <div className="chore-row-text">
+        <span className="chore-name">{chore.name}</span>
+        {note && <span className="chore-note">{note}</span>}
+      </div>
     </li>
   );
 }
@@ -53,6 +56,22 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
 
   // Keep hourInput in sync if parent changes reminderHour (e.g. from another session)
   useEffect(() => { setHourInput(reminderHour ?? 8); }, [reminderHour]);
+
+  function handleMarkAllDone() {
+    displayChores.forEach((c) => {
+      if (!completions[`${displayKey}:${c.id}`]) {
+        onToggleComplete(displayKey, c.id);
+      }
+    });
+  }
+
+  function handleUnmarkAll() {
+    displayChores.forEach((c) => {
+      if (completions[`${displayKey}:${c.id}`]) {
+        onToggleComplete(displayKey, c.id);
+      }
+    });
+  }
 
   async function handleSubscribe(e) {
     e.preventDefault();
@@ -202,7 +221,10 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
             {isShowingToday ? "No chores scheduled today. Enjoy your day!" : "No chores scheduled on this day."}
           </p>
         ) : displayAllDone ? (
-          <div className="today-all-done">All done{isShowingToday ? " for today" : ""}! 🎉</div>
+          <>
+            <div className="today-all-done">All done{isShowingToday ? " for today" : ""}! 🎉</div>
+            <button className="mark-all-btn unmark" onClick={handleUnmarkAll}>Unmark all</button>
+          </>
         ) : (
           <>
             <ul className="chore-list-detail today-chores">
@@ -212,6 +234,7 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
                   chore={c}
                   done={!!completions[`${displayKey}:${c.id}`]}
                   onToggle={() => onToggleComplete(displayKey, c.id)}
+                  note={schedules[c.id]?.notes}
                 />
               ))}
             </ul>
@@ -224,6 +247,7 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
               </div>
               <span className="today-progress-text">{displayDoneCount}/{displayChores.length} done</span>
             </div>
+            <button className="mark-all-btn" onClick={handleMarkAllDone}>✓ Mark all done</button>
           </>
         )}
       </div>
@@ -366,13 +390,52 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
                   value={timezoneInput}
                   onChange={(e) => setTimezoneInput(e.target.value)}
                 >
-                  <option value="America/New_York">Eastern (ET)</option>
-                  <option value="America/Chicago">Central (CT)</option>
-                  <option value="America/Denver">Mountain (MT)</option>
-                  <option value="America/Los_Angeles">Pacific (PT)</option>
-                  <option value="America/Anchorage">Alaska (AKT)</option>
-                  <option value="Pacific/Honolulu">Hawaii (HST)</option>
-                  <option value="UTC">UTC</option>
+                  <optgroup label="North America">
+                    <option value="America/New_York">Eastern (ET)</option>
+                    <option value="America/Chicago">Central (CT)</option>
+                    <option value="America/Denver">Mountain (MT)</option>
+                    <option value="America/Los_Angeles">Pacific (PT)</option>
+                    <option value="America/Anchorage">Alaska (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                    <option value="America/Toronto">Toronto (ET)</option>
+                    <option value="America/Vancouver">Vancouver (PT)</option>
+                    <option value="America/Mexico_City">Mexico City (CT)</option>
+                  </optgroup>
+                  <optgroup label="Europe">
+                    <option value="UTC">UTC</option>
+                    <option value="Europe/London">London (GMT/BST)</option>
+                    <option value="Europe/Paris">Central European (CET)</option>
+                    <option value="Europe/Berlin">Berlin (CET)</option>
+                    <option value="Europe/Rome">Rome (CET)</option>
+                    <option value="Europe/Helsinki">Eastern European (EET)</option>
+                    <option value="Europe/Istanbul">Istanbul (TRT)</option>
+                    <option value="Europe/Moscow">Moscow (MSK)</option>
+                  </optgroup>
+                  <optgroup label="Middle East &amp; Africa">
+                    <option value="Asia/Dubai">Gulf (GST)</option>
+                    <option value="Asia/Riyadh">Riyadh (AST)</option>
+                    <option value="Africa/Cairo">Cairo (EET)</option>
+                    <option value="Africa/Johannesburg">Johannesburg (SAST)</option>
+                    <option value="Africa/Lagos">Lagos (WAT)</option>
+                  </optgroup>
+                  <optgroup label="Asia">
+                    <option value="Asia/Kolkata">India (IST)</option>
+                    <option value="Asia/Karachi">Pakistan (PKT)</option>
+                    <option value="Asia/Dhaka">Dhaka (BST)</option>
+                    <option value="Asia/Bangkok">Bangkok (ICT)</option>
+                    <option value="Asia/Singapore">Singapore (SGT)</option>
+                    <option value="Asia/Shanghai">China (CST)</option>
+                    <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
+                    <option value="Asia/Tokyo">Japan (JST)</option>
+                    <option value="Asia/Seoul">Seoul (KST)</option>
+                  </optgroup>
+                  <optgroup label="Pacific &amp; Oceania">
+                    <option value="Australia/Perth">Perth (AWST)</option>
+                    <option value="Australia/Adelaide">Adelaide (ACST)</option>
+                    <option value="Australia/Sydney">Sydney (AEST)</option>
+                    <option value="Pacific/Auckland">New Zealand (NZST)</option>
+                    <option value="Pacific/Fiji">Fiji (FJT)</option>
+                  </optgroup>
                 </select>
                 <label className="reminder-field-label">Send at</label>
                 <div className="reminder-time-grid">

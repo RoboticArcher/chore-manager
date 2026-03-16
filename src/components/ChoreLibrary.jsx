@@ -199,6 +199,7 @@ export default function ChoreLibrary({
                 value={customName}
                 onChange={(e) => { setCustomName(e.target.value); setCustomError(""); }}
                 placeholder="Chore name..."
+                maxLength={40}
                 onKeyDown={(e) => e.key === "Enter" && handleAddCustom()}
                 autoFocus
               />

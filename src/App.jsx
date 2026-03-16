@@ -17,14 +17,42 @@ function loadFromStorage(key, fallback) {
 
 export default function App() {
   const [step, setStep] = useState(() => loadFromStorage("chore-step", "library"));
-  const [selectedChores, setSelectedChores] = useState(() => loadFromStorage("chore-selected", []));
-  const [schedules, setSchedules] = useState(() => loadFromStorage("chore-schedules", {}));
-  const [completions, setCompletions] = useState(() => loadFromStorage("chore-completions", {}));
+
+  const [selectedChores, setSelectedChores] = useState(() =>
+    loadFromStorage("chore-selected", [])
+  );
+
+  // Custom chores stored separately so deselecting doesn't delete them.
+  // Migration: if chore-custom doesn't exist yet, seed it from selectedChores.
+  const [customChores, setCustomChores] = useState(() => {
+    const saved = loadFromStorage("chore-custom", null);
+    if (saved !== null) return saved;
+    const selected = loadFromStorage("chore-selected", []);
+    return selected.filter((c) => c.custom);
+  });
+
+  const [schedules, setSchedules] = useState(() =>
+    loadFromStorage("chore-schedules", {})
+  );
+  const [completions, setCompletions] = useState(() =>
+    loadFromStorage("chore-completions", {})
+  );
+
+  // Toast state for undo notifications
+  const [toast, setToast] = useState(null); // { message, onUndo }
 
   useEffect(() => { localStorage.setItem("chore-step", JSON.stringify(step)); }, [step]);
   useEffect(() => { localStorage.setItem("chore-selected", JSON.stringify(selectedChores)); }, [selectedChores]);
+  useEffect(() => { localStorage.setItem("chore-custom", JSON.stringify(customChores)); }, [customChores]);
   useEffect(() => { localStorage.setItem("chore-schedules", JSON.stringify(schedules)); }, [schedules]);
   useEffect(() => { localStorage.setItem("chore-completions", JSON.stringify(completions)); }, [completions]);
+
+  // Auto-dismiss toast after 5 seconds
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   function handleToggleComplete(dayKey, choreId) {
     const key = `${dayKey}:${choreId}`;
@@ -40,11 +68,15 @@ export default function App() {
     setSelectedChores((prev) => {
       const exists = prev.find((c) => c.id === chore.id);
       if (exists) {
-        setSchedules((s) => {
-          const next = { ...s };
-          delete next[chore.id];
-          return next;
-        });
+        // For preset chores, also remove their schedule so it resets when re-added.
+        // For custom chores, keep the schedule so it comes back intact on re-select.
+        if (!chore.custom) {
+          setSchedules((s) => {
+            const next = { ...s };
+            delete next[chore.id];
+            return next;
+          });
+        }
         return prev.filter((c) => c.id !== chore.id);
       }
       return [...prev, chore];
@@ -52,9 +84,39 @@ export default function App() {
   }
 
   function handleAddCustom(chore) {
+    setCustomChores((prev) => {
+      if (prev.find((c) => c.id === chore.id)) return prev;
+      return [...prev, chore];
+    });
     setSelectedChores((prev) => {
       if (prev.find((c) => c.id === chore.id)) return prev;
       return [...prev, chore];
+    });
+  }
+
+  // Feature #3: Undo for custom chore deletion
+  function handleDeleteCustom(choreId) {
+    const chore = customChores.find((c) => c.id === choreId);
+    if (!chore) return;
+    const wasSelected = !!selectedChores.find((c) => c.id === choreId);
+    const savedSchedule = schedules[choreId] || null;
+
+    setCustomChores((prev) => prev.filter((c) => c.id !== choreId));
+    setSelectedChores((prev) => prev.filter((c) => c.id !== choreId));
+    setSchedules((prev) => {
+      const next = { ...prev };
+      delete next[choreId];
+      return next;
+    });
+
+    setToast({
+      message: `"${chore.name}" removed.`,
+      onUndo: () => {
+        setCustomChores((prev) => [...prev, chore]);
+        if (wasSelected) setSelectedChores((prev) => [...prev, chore]);
+        if (savedSchedule) setSchedules((prev) => ({ ...prev, [choreId]: savedSchedule }));
+        setToast(null);
+      },
     });
   }
 
@@ -69,7 +131,7 @@ export default function App() {
         if (!next[chore.id]) {
           next[chore.id] = {
             frequency: "weekly",
-            dayOfWeek: 1,
+            dayOfWeek: [1], // Array for multi-day support (Feature #2)
             dayOfMonth: 1,
             month: 0,
             customDays: 7,
@@ -82,15 +144,25 @@ export default function App() {
     setStep("schedule");
   }
 
+  const currentIdx = STEPS.indexOf(step);
+
   return (
     <div className="app">
+      {/* Feature #5: Clickable stepper navigation */}
       <div className="progress-bar">
         {["Pick Chores", "Set Schedules", "Calendar"].map((label, i) => {
-          const currentIdx = STEPS.indexOf(step);
           const isDone = i < currentIdx;
           const isActive = i === currentIdx;
+          // Steps 0 and 1 are clickable when they're behind the current step.
+          // Step 2 (Calendar) is never directly clickable — must go through the flow.
+          const isClickable = isDone && i < 2;
           return (
-            <div key={label} className={`progress-step ${isDone ? "done" : ""} ${isActive ? "active" : ""}`}>
+            <div
+              key={label}
+              className={`progress-step ${isDone ? "done" : ""} ${isActive ? "active" : ""} ${isClickable ? "clickable" : ""}`}
+              onClick={() => isClickable && setStep(STEPS[i])}
+              title={isClickable ? `Go back to ${label}` : undefined}
+            >
               <div className="progress-dot">{isDone ? "✓" : i + 1}</div>
               <span className="progress-label">{label}</span>
             </div>
@@ -101,8 +173,10 @@ export default function App() {
       {step === "library" && (
         <ChoreLibrary
           selectedChores={selectedChores}
+          customChores={customChores}
           onToggleChore={handleToggleChore}
           onAddCustom={handleAddCustom}
+          onDeleteCustom={handleDeleteCustom}
           onNext={handleGoToSchedule}
         />
       )}
@@ -111,6 +185,7 @@ export default function App() {
         <ScheduleSetup
           chores={selectedChores}
           schedules={schedules}
+          completions={completions}
           onChangeSchedule={handleChangeSchedule}
           onBack={() => setStep("library")}
           onNext={() => setStep("calendar")}
@@ -125,6 +200,19 @@ export default function App() {
           onToggleComplete={handleToggleComplete}
           onBack={() => setStep("schedule")}
         />
+      )}
+
+      {/* Feature #3: Undo toast */}
+      {toast && (
+        <div className="toast">
+          <span className="toast-message">{toast.message}</span>
+          {toast.onUndo && (
+            <button className="toast-undo" onClick={toast.onUndo}>
+              Undo
+            </button>
+          )}
+          <button className="toast-close" onClick={() => setToast(null)}>×</button>
+        </div>
       )}
     </div>
   );

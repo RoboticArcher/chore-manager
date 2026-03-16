@@ -7,6 +7,7 @@
   --primary-light: #EEF2FF;
   --green: #22C55E;
   --green-light: #DCFCE7;
+  --red: #ef4444;
   --text: #1A1A2E;
   --text-muted: #6B7280;
   --border: #E5E7EB;
@@ -60,6 +61,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   flex: 1;
   justify-content: center;
   position: relative;
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  transition: background 0.15s;
 }
 
 .progress-step:not(:last-child)::after {
@@ -69,6 +73,20 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   width: 1px;
   height: 24px;
   background: var(--border);
+}
+
+/* Feature #5: Clickable stepper */
+.progress-step.clickable {
+  cursor: pointer;
+}
+.progress-step.clickable:hover {
+  background: var(--primary-light);
+}
+.progress-step.clickable:hover .progress-dot {
+  background: var(--primary-dark);
+}
+.progress-step.clickable:hover .progress-label {
+  color: var(--primary-dark);
 }
 
 .progress-dot {
@@ -187,14 +205,13 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .btn-ghost.full-width { width: 100%; margin-top: 8px; }
 
 /* ---- Category Tabs ---- */
+/* Feature #6: flex-wrap so all labels visible on desktop (no clipping) */
 .category-tabs {
   display: flex;
   gap: 8px;
   padding: 0 24px 16px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  flex-wrap: wrap;
 }
-.category-tabs::-webkit-scrollbar { display: none; }
 
 .tab-btn {
   white-space: nowrap;
@@ -269,6 +286,38 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .chore-name { font-size: 14px; }
 .check-mark { font-size: 12px; color: var(--primary); font-weight: 700; margin-left: 2px; }
 
+/* Bug #1: Custom chore chip wrapper with delete button */
+.custom-chip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Delete button appears on hover — red × badge top-right */
+.delete-custom-btn {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--red);
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 2;
+  line-height: 1;
+  border: 2px solid var(--white);
+}
+
+.custom-chip-wrap:hover .delete-custom-btn {
+  opacity: 1;
+}
+
 /* ---- Custom Chore Form ---- */
 .custom-chore-section {
   padding: 16px 24px 8px;
@@ -299,15 +348,58 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   align-items: center;
 }
 
-.emoji-input {
+/* Bug #3: Emoji picker button replaces the old emoji text input */
+.emoji-picker-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.emoji-pick-btn {
   width: 52px;
-  text-align: center;
-  font-size: 18px;
-  padding: 8px;
+  height: 42px;
+  font-size: 22px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
 }
+
+.emoji-pick-btn:hover { border-color: var(--primary); }
+
+.emoji-picker-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  box-shadow: var(--shadow-md);
+  min-width: 280px;
+}
+
+.emoji-option {
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.emoji-option:hover { background: var(--primary-light); }
+.emoji-option.selected { background: var(--primary-light); outline: 2px solid var(--primary); }
 
 .text-input {
   flex: 1;
@@ -319,9 +411,16 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   background: var(--white);
 }
 
-.text-input:focus, .emoji-input:focus {
-  outline: none;
-  border-color: var(--primary);
+.text-input:focus { outline: none; border-color: var(--primary); }
+
+/* Bug #2: Inline validation */
+.text-input.input-error { border-color: var(--red); }
+
+.custom-form-error {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--red);
+  font-weight: 500;
 }
 
 /* ---- Schedule Cards ---- */
@@ -354,7 +453,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .schedule-card-header:hover { background: var(--bg); }
 
-.chore-icon { display: flex; align-items: center; gap: 8px; }
+.chore-icon { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .schedule-summary {
   font-size: 13px;
@@ -373,6 +472,20 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* Feature #1: Streak badge */
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #d97706;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
 }
 
 /* ---- Frequency chips ---- */
@@ -414,6 +527,15 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.4px;
+}
+
+.label-hint {
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .day-grid {
@@ -510,7 +632,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .date-input:focus { outline: none; border-color: var(--primary); }
 
-/* ---- Today Section ---- */
+/* ---- Today / Day Detail Card (Bug #4 updated) ---- */
 .today-section {
   margin: 16px 16px 0;
   background: var(--white);
@@ -535,6 +657,11 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   letter-spacing: 0.8px;
   color: var(--primary);
   margin-bottom: 2px;
+}
+
+/* Bug #4: different colour for "Selected Date" vs "TODAY" */
+.selected-label {
+  color: var(--text-muted);
 }
 
 .today-date {
@@ -588,6 +715,25 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+/* Feature #1: Monthly completion summary */
+.completion-summary {
+  margin: 10px 16px 0;
+  background: var(--green-light);
+  border: 1.5px solid #86efac;
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #15803d;
+  text-align: center;
+}
+
+.completion-summary.perfect {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #d97706;
 }
 
 /* ---- Chore Row (with completion) ---- */
@@ -793,7 +939,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   padding: 1px 3px;
 }
 
-/* ---- Day Detail ---- */
+/* ---- Day Detail (below calendar) ---- */
 .day-detail {
   margin: 16px;
   background: var(--bg);
@@ -866,6 +1012,56 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .coming-soon p { font-size: 13px; color: #92400E; }
 
+/* ---- Feature #3: Undo toast ---- */
+.toast {
+  position: fixed;
+  bottom: 80px; /* above sticky footer */
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: white;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 400px;
+  width: calc(100% - 32px);
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+  animation: toastIn 0.2s ease;
+}
+
+@keyframes toastIn {
+  from { transform: translateX(-50%) translateY(12px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);   opacity: 1; }
+}
+
+.toast-message { flex: 1; font-size: 14px; }
+
+.toast-undo {
+  color: #93c5fd;
+  font-size: 14px;
+  font-weight: 700;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+.toast-undo:hover { color: white; }
+
+.toast-close {
+  color: rgba(255,255,255,0.5);
+  font-size: 18px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+.toast-close:hover { color: white; }
+
 /* ---- Mobile ---- */
 @media (max-width: 480px) {
   .screen-header h1 { font-size: 24px; }
@@ -875,4 +1071,5 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   .schedule-list { padding: 8px 16px; }
   .month-nav { padding: 0 16px 16px; }
   .day-detail { margin: 16px 8px; }
+  .emoji-picker-panel { min-width: 240px; grid-template-columns: repeat(6, 1fr); }
 }

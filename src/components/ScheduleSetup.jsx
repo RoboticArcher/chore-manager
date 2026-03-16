@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { calculateStreak } from "../utils/scheduleUtils";
 
 const FREQUENCY_OPTIONS = [
   { value: "daily", label: "Daily", description: "Every day" },
@@ -16,7 +17,14 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-function ScheduleCard({ chore, schedule, onChange }) {
+// Normalize dayOfWeek: old data may store a plain number, new data stores an array.
+function normWeekDays(val) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === "number") return [val];
+  return [1];
+}
+
+function ScheduleCard({ chore, schedule, completions, onChange }) {
   const freq = schedule?.frequency || "weekly";
   const [expanded, setExpanded] = useState(true);
 
@@ -24,11 +32,37 @@ function ScheduleCard({ chore, schedule, onChange }) {
     onChange(chore.id, { ...schedule, frequency: freq, ...fields });
   }
 
+  // Feature #2: Multi-day weekly — dayOfWeek is now an array
+  const weekDays = normWeekDays(schedule?.dayOfWeek);
+
+  function toggleWeekDay(i) {
+    if (weekDays.includes(i)) {
+      // Don't let the user remove the last day
+      if (weekDays.length > 1) {
+        update({ dayOfWeek: weekDays.filter((d) => d !== i).sort((a, b) => a - b) });
+      }
+    } else {
+      update({ dayOfWeek: [...weekDays, i].sort((a, b) => a - b) });
+    }
+  }
+
+  // Biweekly still uses a single day (normalised to first element if array)
+  const biDow =
+    typeof schedule?.dayOfWeek === "number"
+      ? schedule.dayOfWeek
+      : normWeekDays(schedule?.dayOfWeek)[0];
+
+  // Feature #1: Streak counter
+  const streak = calculateStreak(chore, schedule, completions);
+
   return (
     <div className="schedule-card">
       <button className="schedule-card-header" onClick={() => setExpanded(!expanded)}>
         <span className="chore-icon">
           {chore.emoji} {chore.name}
+          {streak > 0 && (
+            <span className="streak-badge">🔥 {streak} in a row</span>
+          )}
         </span>
         <span className="schedule-summary">
           {getScheduleSummary(schedule)} {expanded ? "▲" : "▼"}
@@ -43,23 +77,25 @@ function ScheduleCard({ chore, schedule, onChange }) {
               <button
                 key={opt.value}
                 className={`freq-chip ${freq === opt.value ? "selected" : ""}`}
-                onClick={() => update({ frequency: opt.value, dayOfWeek: 1, dayOfMonth: 1, month: 0, customDays: 7 })}
+                onClick={() =>
+                  update({ frequency: opt.value, dayOfWeek: [1], dayOfMonth: 1, month: 0, customDays: 7 })
+                }
               >
                 {opt.label}
               </button>
             ))}
           </div>
 
-          {/* Refinement options based on frequency */}
+          {/* Feature #2: Weekly — multi-select days */}
           {freq === "weekly" && (
             <div className="refine-section">
-              <label>Which day?</label>
+              <label>Which day(s)? <span className="label-hint">tap to toggle</span></label>
               <div className="day-grid">
                 {DAYS_OF_WEEK.map((day, i) => (
                   <button
                     key={day}
-                    className={`day-chip ${(schedule?.dayOfWeek ?? 1) === i ? "selected" : ""}`}
-                    onClick={() => update({ dayOfWeek: i })}
+                    className={`day-chip ${weekDays.includes(i) ? "selected" : ""}`}
+                    onClick={() => toggleWeekDay(i)}
                   >
                     {day}
                   </button>
@@ -68,6 +104,7 @@ function ScheduleCard({ chore, schedule, onChange }) {
             </div>
           )}
 
+          {/* Biweekly — single day */}
           {freq === "biweekly" && (
             <div className="refine-section">
               <label>Which day?</label>
@@ -75,7 +112,7 @@ function ScheduleCard({ chore, schedule, onChange }) {
                 {DAYS_OF_WEEK.map((day, i) => (
                   <button
                     key={day}
-                    className={`day-chip ${(schedule?.dayOfWeek ?? 1) === i ? "selected" : ""}`}
+                    className={`day-chip ${biDow === i ? "selected" : ""}`}
                     onClick={() => update({ dayOfWeek: i })}
                   >
                     {day}
@@ -181,20 +218,43 @@ function ScheduleCard({ chore, schedule, onChange }) {
   );
 }
 
-function getScheduleSummary(schedule) {
+export function getScheduleSummary(schedule) {
   if (!schedule) return "Not set";
   const { frequency, dayOfWeek, dayOfMonth, month, customDays } = schedule;
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const shortDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
   switch (frequency) {
-    case "daily": return "Every day";
-    case "weekly": return `Every ${days[dayOfWeek ?? 1]}`;
-    case "biweekly": return `Every other ${days[dayOfWeek ?? 1]}`;
-    case "monthly": return `Monthly on the ${ordinal(dayOfMonth ?? 1)}`;
-    case "quarterly": return `Quarterly on the ${ordinal(dayOfMonth ?? 1)}`;
-    case "yearly": return `${months[month ?? 0]} ${dayOfMonth ?? 1}`;
-    case "custom": return `Every ${customDays ?? 7} days`;
-    default: return "Not set";
+    case "daily":
+      return "Every day";
+
+    case "weekly": {
+      // Feature #2: dayOfWeek is now an array
+      const targets = Array.isArray(dayOfWeek) ? dayOfWeek : [dayOfWeek ?? 1];
+      if (targets.length === 1) return `Every ${days[targets[0]]}`;
+      return `Every ${targets.map((d) => shortDays[d]).join(", ")}`;
+    }
+
+    case "biweekly": {
+      const dow = typeof dayOfWeek === "number" ? dayOfWeek : normWeekDays(dayOfWeek)[0];
+      return `Every other ${days[dow ?? 1]}`;
+    }
+
+    case "monthly":
+      return `Monthly on the ${ordinal(dayOfMonth ?? 1)}`;
+
+    case "quarterly":
+      return `Quarterly on the ${ordinal(dayOfMonth ?? 1)}`;
+
+    case "yearly":
+      return `${months[month ?? 0]} ${dayOfMonth ?? 1}`;
+
+    case "custom":
+      return `Every ${customDays ?? 7} days`;
+
+    default:
+      return "Not set";
   }
 }
 
@@ -204,7 +264,7 @@ function ordinal(n) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-export default function ScheduleSetup({ chores, schedules, onChangeSchedule, onBack, onNext }) {
+export default function ScheduleSetup({ chores, schedules, completions, onChangeSchedule, onBack, onNext }) {
   return (
     <div className="screen">
       <div className="screen-header">
@@ -218,6 +278,7 @@ export default function ScheduleSetup({ chores, schedules, onChangeSchedule, onB
             key={chore.id}
             chore={chore}
             schedule={schedules[chore.id]}
+            completions={completions}
             onChange={onChangeSchedule}
           />
         ))}
@@ -234,5 +295,3 @@ export default function ScheduleSetup({ chores, schedules, onChangeSchedule, onB
     </div>
   );
 }
-
-export { getScheduleSummary };

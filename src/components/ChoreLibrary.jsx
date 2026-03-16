@@ -10,6 +10,54 @@ const CHORE_EMOJIS = [
   "🚗", "🏋️", "📅", "⏰", "✨", "⭐", "🌊", "🌻", "🧯", "🪠",
 ];
 
+// Seasonal chore suggestions — static, grouped by season
+const SEASONAL = {
+  spring: {
+    label: "🌱 Spring Suggestions",
+    chores: [
+      { id: "seasonal-gutters", name: "Clean Gutters", emoji: "🏡" },
+      { id: "seasonal-windows", name: "Wash Windows", emoji: "🪟" },
+      { id: "seasonal-fertilize", name: "Fertilize Lawn", emoji: "🌿" },
+      { id: "seasonal-ac", name: "AC Service Check", emoji: "❄️" },
+    ],
+  },
+  summer: {
+    label: "☀️ Summer Suggestions",
+    chores: [
+      { id: "seasonal-mow", name: "Mow Lawn", emoji: "🌱" },
+      { id: "seasonal-acfilter", name: "Replace AC Filter", emoji: "❄️" },
+      { id: "seasonal-grill", name: "Clean Grill", emoji: "🍳" },
+      { id: "seasonal-irrigation", name: "Check Irrigation", emoji: "🌊" },
+    ],
+  },
+  fall: {
+    label: "🍂 Fall Suggestions",
+    chores: [
+      { id: "seasonal-leaves", name: "Rake Leaves", emoji: "🌳" },
+      { id: "seasonal-winterize", name: "Winterize Garden", emoji: "🌱" },
+      { id: "seasonal-furnace", name: "Furnace Service", emoji: "🔧" },
+      { id: "seasonal-dryer", name: "Clean Dryer Vent", emoji: "🧺" },
+    ],
+  },
+  winter: {
+    label: "❄️ Winter Suggestions",
+    chores: [
+      { id: "seasonal-deepclean", name: "Deep Clean Kitchen", emoji: "🧽" },
+      { id: "seasonal-closets", name: "Declutter Closets", emoji: "📦" },
+      { id: "seasonal-smoke", name: "Check Smoke Detectors", emoji: "🧯" },
+      { id: "seasonal-pipes", name: "Insulate Pipes", emoji: "🔧" },
+    ],
+  },
+};
+
+function getSeason() {
+  const m = new Date().getMonth();
+  if (m >= 2 && m <= 4) return "spring";
+  if (m >= 5 && m <= 7) return "summer";
+  if (m >= 8 && m <= 10) return "fall";
+  return "winter";
+}
+
 export default function ChoreLibrary({
   selectedChores,
   customChores,
@@ -24,6 +72,7 @@ export default function ChoreLibrary({
   const [activeCategory, setActiveCategory] = useState(null);
   const [customError, setCustomError] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showSeasonal, setShowSeasonal] = useState(true);
   const emojiPickerRef = useRef(null);
 
   // Close emoji picker when clicking outside
@@ -38,7 +87,7 @@ export default function ChoreLibrary({
     return () => document.removeEventListener("mousedown", onOutside);
   }, [showEmojiPicker]);
 
-  // Feature #4: Collect all existing names for duplicate detection
+  // Collect all existing names for duplicate detection
   const allChoreNames = [
     ...PRESET_CHORES.flatMap((cat) => cat.chores.map((c) => c.name.toLowerCase())),
     ...customChores.map((c) => c.name.toLowerCase()),
@@ -47,12 +96,10 @@ export default function ChoreLibrary({
   const isDuplicate = trimmedName.length > 0 && allChoreNames.includes(trimmedName.toLowerCase());
 
   function handleAddCustom() {
-    // Bug #2: Validate empty input with inline message
     if (!trimmedName) {
       setCustomError("Please enter a chore name.");
       return;
     }
-    // Feature #4: Block duplicate names
     if (isDuplicate) {
       setCustomError("A chore with this name already exists.");
       return;
@@ -67,6 +114,18 @@ export default function ChoreLibrary({
   const selectedIds = new Set(selectedChores.map((c) => c.id));
   const count = selectedChores.length;
 
+  // Seasonal suggestion helpers
+  const season = getSeason();
+  const seasonal = SEASONAL[season];
+
+  function handleSeasonalClick(sc) {
+    if (selectedIds.has(sc.id)) {
+      onToggleChore(sc); // deselect
+    } else {
+      onAddCustom({ ...sc, custom: true }); // add as custom + select
+    }
+  }
+
   return (
     <div className="screen">
       <div className="screen-header">
@@ -74,7 +133,43 @@ export default function ChoreLibrary({
         <p className="subtitle">Select everything you want to track, then we'll set schedules.</p>
       </div>
 
-      {/* Feature #6: Category tabs — now flex-wrap so all labels visible on desktop */}
+      {/* Seasonal suggestions banner */}
+      {showSeasonal && activeCategory === null && (
+        <div className="seasonal-banner">
+          <div className="seasonal-header">
+            <span className="seasonal-title">{seasonal.label}</span>
+            <button
+              className="seasonal-dismiss"
+              onClick={() => setShowSeasonal(false)}
+              aria-label="Dismiss seasonal suggestions"
+            >
+              ×
+            </button>
+          </div>
+          <div className="seasonal-chips">
+            {seasonal.chores.map((sc) => {
+              const selected = selectedIds.has(sc.id);
+              // Check if name already exists in preset list
+              const inPreset = PRESET_CHORES.some((cat) =>
+                cat.chores.some((c) => c.name.toLowerCase() === sc.name.toLowerCase())
+              );
+              return (
+                <button
+                  key={sc.id}
+                  className={`seasonal-chip ${selected ? "selected" : ""}`}
+                  onClick={() => !inPreset && handleSeasonalClick(sc)}
+                  disabled={inPreset}
+                  title={inPreset ? "Already in the list above" : undefined}
+                >
+                  {sc.emoji} {sc.name} {selected ? "✓" : "+"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Category tabs */}
       <div className="category-tabs">
         <button
           className={`tab-btn ${activeCategory === null ? "active" : ""}`}
@@ -122,8 +217,7 @@ export default function ChoreLibrary({
           </div>
         ))}
 
-        {/* Bug #1: Custom chores persist even when deselected.
-            Shown only in the "All" view to keep the category filter clean. */}
+        {/* Custom chores — shown in "All" view only */}
         {activeCategory === null && customChores.length > 0 && (
           <div className="category-section">
             <h3 className="category-label">✏️ Custom</h3>
@@ -140,7 +234,6 @@ export default function ChoreLibrary({
                       <span className="chore-name">{chore.name}</span>
                       {selected && <span className="check-mark">✓</span>}
                     </button>
-                    {/* Hover to reveal — explicitly deletes (not deselects) */}
                     <button
                       className="delete-custom-btn"
                       onClick={(e) => { e.stopPropagation(); onDeleteCustom(chore.id); }}
@@ -167,13 +260,13 @@ export default function ChoreLibrary({
           <div className="custom-form">
             <h4>Add Custom Chore</h4>
             <div className="custom-form-row">
-              {/* Bug #3: Functional emoji picker */}
               <div className="emoji-picker-wrap" ref={emojiPickerRef}>
                 <button
                   type="button"
                   className="emoji-pick-btn"
                   onClick={() => setShowEmojiPicker((v) => !v)}
                   title="Choose an emoji"
+                  aria-label="Choose emoji"
                 >
                   {customEmoji}
                 </button>
@@ -218,10 +311,8 @@ export default function ChoreLibrary({
               </button>
             </div>
 
-            {/* Bug #2: Inline validation feedback */}
             {customError && <div className="custom-form-error">{customError}</div>}
 
-            {/* Feature #4: Real-time duplicate warning while typing */}
             {!customError && isDuplicate && (
               <div className="custom-form-error">A chore with this name already exists.</div>
             )}

@@ -62,6 +62,10 @@ export default function App() {
     )
   );
 
+  // Dark mode
+  const [darkMode, setDarkMode] = useState(() => loadFromStorage("dark-mode", false));
+  useEffect(() => { saveToStorage("dark-mode", darkMode); }, [darkMode]);
+
   // Toast state for undo notifications
   const [toast, setToast] = useState(null); // { message, onUndo }
 
@@ -197,14 +201,12 @@ export default function App() {
   const currentIdx = STEPS.indexOf(step);
 
   return (
-    <div className="app">
-      {/* Feature #5: Clickable stepper navigation */}
+    <div className={`app${darkMode ? " dark" : ""}`}>
+      {/* Progress bar with dark mode toggle */}
       <div className="progress-bar">
         {["Pick Chores", "Set Schedules", "Calendar"].map((label, i) => {
           const isDone = i < currentIdx;
           const isActive = i === currentIdx;
-          // Steps 0 and 1 are clickable when they're behind the current step.
-          // Step 2 (Calendar) is never directly clickable — must go through the flow.
           const isClickable = isDone && i < 2;
           return (
             <div
@@ -218,6 +220,14 @@ export default function App() {
             </div>
           );
         })}
+        <button
+          className="theme-toggle"
+          onClick={() => setDarkMode((d) => !d)}
+          title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+          aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {darkMode ? "☀️" : "🌙"}
+        </button>
       </div>
 
       {step === "library" && (

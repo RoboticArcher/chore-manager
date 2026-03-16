@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
-import { buildCalendarMap, dateKey } from "../utils/scheduleUtils";
+import { useState, useMemo, useEffect, useRef } from "react";
+import confetti from "canvas-confetti";
+import { buildCalendarMap, dateKey, calculateStreak } from "../utils/scheduleUtils";
 import { downloadICS } from "../utils/icsExport";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -43,19 +44,28 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
   const [selectedDay, setSelectedDay] = useState(null);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showReminderPanel, setShowReminderPanel] = useState(false);
+  const [showStatsPanel, setShowStatsPanel] = useState(false);
 
   // Email reminder form state
   const [emailInput, setEmailInput] = useState("");
-  // Initialize timezone from saved preference (falls back to device timezone)
   const [timezoneInput, setTimezoneInput] = useState(
     reminderTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"
   );
   const [hourInput, setHourInput] = useState(reminderHour ?? 8);
-  const [subscribeStatus, setSubscribeStatus] = useState("idle"); // "idle" | "loading" | "error"
-  const [updateStatus, setUpdateStatus] = useState("idle"); // for updating time when already subscribed
+  const [subscribeStatus, setSubscribeStatus] = useState("idle");
+  const [updateStatus, setUpdateStatus] = useState("idle");
 
-  // Keep hourInput in sync if parent changes reminderHour (e.g. from another session)
+  // Keep hourInput in sync if parent changes reminderHour
   useEffect(() => { setHourInput(reminderHour ?? 8); }, [reminderHour]);
+
+  // Confetti when all chores for a day are marked done
+  const prevAllDoneRef = useRef(false);
+  useEffect(() => {
+    if (displayAllDone && displayChores.length > 0 && !prevAllDoneRef.current) {
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    }
+    prevAllDoneRef.current = displayAllDone;
+  });
 
   function handleMarkAllDone() {
     displayChores.forEach((c) => {
@@ -91,7 +101,7 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
       if (!res.ok) throw new Error("Server error");
       onSetReminderEmail(emailInput);
       onSetReminderHour(hourInput);
-      onSetReminderTimezone(timezoneInput); // persist timezone selection
+      onSetReminderTimezone(timezoneInput);
       setSubscribeStatus("idle");
     } catch {
       setSubscribeStatus("error");
@@ -125,7 +135,6 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
 
   async function handleUnsubscribe() {
     if (!reminderEmail) return;
-    // In-app removal — no HMAC token needed (user is present)
     try {
       await fetch(`/api/unsubscribe?email=${encodeURIComponent(reminderEmail)}`);
     } catch {
@@ -134,11 +143,33 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
     onSetReminderEmail(null);
   }
 
-  // Memoized — only recomputes when chores/schedules/month change, not on every completion toggle
+  // Memoized calendar map — only recomputes on chore/schedule/month change
   const calMap = useMemo(
     () => buildCalendarMap(chores, schedules, viewYear, viewMonth),
     [chores, schedules, viewYear, viewMonth]
   );
+
+  // Stats: last 6 months completion data
+  const monthlyStats = useMemo(() => {
+    const stats = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const yr = d.getFullYear();
+      const mo = d.getMonth();
+      const map = buildCalendarMap(chores, schedules, yr, mo);
+      const total = Object.values(map).reduce((sum, arr) => sum + arr.length, 0);
+      const done = Object.entries(map).reduce((sum, [key, arr]) => {
+        return sum + arr.filter((c) => !!completions[`${key}:${c.id}`]).length;
+      }, 0);
+      stats.push({
+        label: d.toLocaleString("default", { month: "short" }),
+        total,
+        done,
+        pct: total > 0 ? Math.round((done / total) * 100) : null,
+      });
+    }
+    return stats;
+  }, [chores, schedules, completions]);
 
   const firstOfMonth = new Date(viewYear, viewMonth, 1);
   const startPadding = firstOfMonth.getDay();
@@ -158,22 +189,19 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
 
   const todayKey = dateKey(today);
 
-  // The key for the selected day (if any)
   const selectedKey = selectedDay
     ? `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`
     : null;
 
-  // Bug #4: Top card shows selected day OR today (when nothing is selected)
   const displayKey = selectedDay ? selectedKey : todayKey;
   const displayChores = calMap[displayKey] || [];
   const displayDoneCount = displayChores.filter((c) => completions[`${displayKey}:${c.id}`]).length;
   const displayAllDone = displayChores.length > 0 && displayDoneCount === displayChores.length;
   const isShowingToday = !selectedDay || selectedKey === todayKey;
 
-  // The date object for the display card header
   const displayDate = selectedDay ? new Date(viewYear, viewMonth, selectedDay) : today;
 
-  // Feature #1: Monthly completion percentage
+  // Monthly completion percentage
   const totalThisMonth = Object.values(calMap).reduce((sum, arr) => sum + arr.length, 0);
   const completedThisMonth = Object.entries(calMap).reduce((sum, [key, dayChores]) => {
     return sum + dayChores.filter((c) => !!completions[`${key}:${c.id}`]).length;
@@ -185,7 +213,7 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
   return (
     <div className="screen">
 
-      {/* Bug #4: Top detail card — updates when a date is clicked */}
+      {/* Top detail card */}
       <div className="today-section">
         <div className="today-header">
           <div>
@@ -207,10 +235,13 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
                 ← Today
               </button>
             )}
-            <button className="export-btn" onClick={() => setShowReminderPanel(true)} title="Email reminders">
+            <button className="export-btn" onClick={() => setShowStatsPanel(true)} title="Stats" aria-label="View stats">
+              📊
+            </button>
+            <button className="export-btn" onClick={() => setShowReminderPanel(true)} title="Email reminders" aria-label="Email reminders">
               🔔{reminderEmail ? <span className="reminder-active-dot" /> : null}
             </button>
-            <button className="export-btn" onClick={() => setShowExportPanel(true)}>
+            <button className="export-btn" onClick={() => setShowExportPanel(true)} aria-label="Export calendar">
               Export ↗
             </button>
           </div>
@@ -252,7 +283,7 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
         )}
       </div>
 
-      {/* Feature #1: Monthly completion percentage summary */}
+      {/* Monthly completion percentage summary */}
       {completionPct !== null && (
         <div className={`completion-summary ${completionPct === 100 ? "perfect" : ""}`}>
           {completionPct === 100
@@ -264,12 +295,12 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
 
       {/* Month navigation */}
       <div className="month-nav">
-        <button className="nav-arrow" onClick={prevMonth}>‹</button>
+        <button className="nav-arrow" onClick={prevMonth} aria-label="Previous month">‹</button>
         <div className="month-title-block">
           <h2 className="month-title">{MONTH_NAMES[viewMonth]} {viewYear}</h2>
           <span className="month-count">{totalThisMonth} chore{totalThisMonth !== 1 ? "s" : ""}</span>
         </div>
-        <button className="nav-arrow" onClick={nextMonth}>›</button>
+        <button className="nav-arrow" onClick={nextMonth} aria-label="Next month">›</button>
       </div>
 
       {/* Calendar grid */}
@@ -295,6 +326,7 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
               key={day}
               className={`cal-cell ${isToday ? "today" : ""} ${isSelected ? "selected" : ""} ${dayChores.length > 0 ? "has-chores" : ""} ${allDone ? "all-done" : ""}`}
               onClick={() => setSelectedDay(isSelected ? null : day)}
+              aria-label={`${MONTH_NAMES[viewMonth]} ${day}${dayChores.length > 0 ? `, ${dayChores.length} chore${dayChores.length !== 1 ? "s" : ""}` : ""}`}
             >
               <span className="cal-day-num">{day}</span>
               {dayChores.length > 0 && (
@@ -333,6 +365,12 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
               <p><strong>Apple Calendar:</strong> Double-click the downloaded file to import.</p>
               <p><strong>Google Calendar:</strong> Go to Settings → Import &amp; Export → Import.</p>
             </div>
+            <button
+              className="btn-ghost full-width"
+              onClick={() => { setShowExportPanel(false); setTimeout(() => window.print(), 150); }}
+            >
+              🖨️ Print schedule
+            </button>
             <button className="btn-ghost full-width" onClick={() => setShowExportPanel(false)}>Close</button>
           </div>
         </div>
@@ -464,6 +502,59 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
               </form>
             )}
             <button className="btn-ghost full-width" onClick={() => setShowReminderPanel(false)} style={{ marginTop: 8 }}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Stats modal */}
+      {showStatsPanel && (
+        <div className="modal-overlay" onClick={() => setShowStatsPanel(false)}>
+          <div className="modal stats-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>📊 Your Stats</h3>
+
+            <div className="stats-section">
+              <div className="stats-section-title">Last 6 Months</div>
+              <div className="stats-bars">
+                {monthlyStats.map((s) => (
+                  <div key={s.label} className="stats-bar-item">
+                    <div className="stats-bar-track">
+                      <div
+                        className="stats-bar-fill"
+                        style={{ height: `${s.pct ?? 0}%` }}
+                      />
+                    </div>
+                    <div className="stats-bar-label">{s.label}</div>
+                    <div className="stats-bar-pct">{s.pct !== null ? `${s.pct}%` : "–"}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="stats-section">
+              <div className="stats-section-title">All-Time</div>
+              <div className="stats-total-row">
+                <span className="stats-total-num">{Object.keys(completions).length}</span>
+                <span className="stats-total-label">chores completed</span>
+              </div>
+            </div>
+
+            {chores.some((c) => calculateStreak(c, schedules[c.id], completions) > 0) && (
+              <div className="stats-section">
+                <div className="stats-section-title">Active Streaks</div>
+                {chores
+                  .map((c) => ({ chore: c, streak: calculateStreak(c, schedules[c.id], completions) }))
+                  .filter(({ streak }) => streak > 0)
+                  .sort((a, b) => b.streak - a.streak)
+                  .map(({ chore, streak }) => (
+                    <div key={chore.id} className="stats-chore-row">
+                      <span>{chore.emoji} {chore.name}</span>
+                      <span className="streak-badge">🔥 {streak} in a row</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            <button className="btn-ghost full-width" onClick={() => setShowStatsPanel(false)}>Close</button>
           </div>
         </div>
       )}

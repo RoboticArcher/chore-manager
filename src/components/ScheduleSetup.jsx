@@ -215,6 +215,16 @@ function ScheduleCard({ chore, schedule, completions, onChange }) {
                 if (/^\d{4}-\d{2}-\d{2}$/.test(val)) update({ startDate: val });
               }}
             />
+            {/* Past date warning: only show if start date is > 7 days in the past */}
+            {(() => {
+              const sd = schedule?.startDate;
+              if (!sd) return null;
+              const daysAgo = Math.floor((Date.now() - new Date(sd + "T00:00:00").getTime()) / 86400000);
+              if (daysAgo > 7) return (
+                <div className="date-warning">⚠️ Start date is {daysAgo} days in the past — old calendar dates will show these chores.</div>
+              );
+              return null;
+            })()}
           </div>
 
           {/* Notes */}

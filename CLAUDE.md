@@ -139,6 +139,13 @@ DTSTART is calculated to align with the RRULE pattern (avoids phantom events in 
 - ✅ "Mark all done" / "Unmark all" button on daily chore card
 - ✅ Optional chore notes field (100 chars, shown in calendar view)
 - ✅ International timezone support (30+ timezones grouped by region)
+- ✅ Dark mode toggle (🌙/☀️, persisted to localStorage)
+- ✅ Confetti animation when all chores for a day are completed
+- ✅ Stats Dashboard modal — 6-month completion bar chart + all-time count + active streaks
+- ✅ Seasonal chore suggestions banner (spring/summer/fall/winter, dismissable, auto-adds as custom)
+- ✅ Past date warning when start date is >7 days in the past
+- ✅ ARIA labels on calendar nav, day cells, and all action buttons
+- ✅ Print schedule button in Export modal (@media print CSS)
 
 ## Commands
 ```

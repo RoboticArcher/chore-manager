@@ -136,6 +136,9 @@ DTSTART is calculated to align with the RRULE pattern (avoids phantom events in 
 - ✅ Auto-sync schedule to server on changes
 - ✅ Undo for custom chore deletion
 - ✅ Clickable stepper navigation
+- ✅ "Mark all done" / "Unmark all" button on daily chore card
+- ✅ Optional chore notes field (100 chars, shown in calendar view)
+- ✅ International timezone support (30+ timezones grouped by region)
 
 ## Commands
 ```
@@ -175,3 +178,6 @@ A "Family Plan" with shared completion view (via sync code or Supabase) and mult
 - Schedule auto-sync is debounced 1.5s to prevent API spam on rapid chore changes
 - `dayOfMonth` is clamped to last valid day of the month in `scheduleUtils.js` (prevents overflow to next month)
 - `customChores` stored separately from `selectedChores` — deselecting a custom chore doesn't delete it
+- Start date `onChange` validates `YYYY-MM-DD` regex before saving — prevents malformed keyboard entry
+- Chore notes stored in `chore-schedules` alongside schedule data (key: `notes` on each schedule object)
+- `.chore-chip .chore-name` scoped truncation — ellipsis only in chips, not in detail list rows

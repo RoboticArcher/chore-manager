@@ -1,14 +1,12 @@
 import { Redis } from "@upstash/redis";
-import { createHmac } from "crypto";
 import { buildCalendarMap } from "../src/utils/scheduleUtils.js";
 import { buildEmailHtml, buildSubject } from "../src/utils/emailTemplate.js";
+import { generateToken, getCronSecret } from "../src/utils/tokenUtils.js";
+
+// Validate secret at startup — throws immediately if misconfigured
+getCronSecret();
 
 const redis = Redis.fromEnv();
-
-function generateToken(email) {
-  const secret = process.env.CRON_SECRET || "";
-  return createHmac("sha256", secret).update(email).digest("hex");
-}
 
 /**
  * Get today's date string ("YYYY-MM-DD") in a given IANA timezone.

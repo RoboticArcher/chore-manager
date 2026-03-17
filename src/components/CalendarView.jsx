@@ -136,7 +136,9 @@ export default function CalendarView({ chores, schedules, completions, onToggleC
   async function handleUnsubscribe() {
     if (!reminderEmail) return;
     try {
-      await fetch(`/api/unsubscribe?email=${encodeURIComponent(reminderEmail)}`);
+      await fetch(`/api/subscribe?email=${encodeURIComponent(reminderEmail)}`, {
+        method: "DELETE",
+      });
     } catch {
       // Ignore — clear locally regardless
     }

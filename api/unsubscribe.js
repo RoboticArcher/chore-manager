@@ -1,12 +1,11 @@
 import { Redis } from "@upstash/redis";
-import { createHmac, timingSafeEqual } from "crypto";
+import { timingSafeEqual } from "crypto";
+import { generateToken, getCronSecret } from "../src/utils/tokenUtils.js";
+
+// Validate secret at startup — throws immediately if misconfigured
+getCronSecret();
 
 const redis = Redis.fromEnv();
-
-function generateToken(email) {
-  const secret = process.env.CRON_SECRET || "";
-  return createHmac("sha256", secret).update(email).digest("hex");
-}
 
 export default async function handler(req, res) {
   const { email, token } = req.query || {};
@@ -15,38 +14,50 @@ export default async function handler(req, res) {
     return res.status(400).send("<h1>Missing email parameter</h1>");
   }
 
-  // Verify the HMAC token to prevent unauthorized unsubscribes via email link
-  if (token) {
-    const expected = generateToken(email);
-    let valid = false;
-    try {
-      valid = timingSafeEqual(
-        Buffer.from(token, "hex"),
-        Buffer.from(expected, "hex")
-      );
-    } catch {
-      valid = false;
-    }
-    if (!valid) {
-      return res.status(400).send(`
-        <!DOCTYPE html>
-        <html>
-          <head><title>Invalid Link</title></head>
-          <body style="font-family:sans-serif;max-width:480px;margin:80px auto;padding:0 20px;text-align:center">
-            <h2>Invalid unsubscribe link</h2>
-            <p>This link has expired or is invalid. Open the app and click Remove to disable reminders.</p>
-          </body>
-        </html>
-      `);
-    }
+  // Token is always required — a missing token is an auth failure, not a bypass
+  if (!token) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>Invalid Link</title></head>
+        <body style="font-family:sans-serif;max-width:480px;margin:80px auto;padding:0 20px;text-align:center">
+          <h2>Invalid unsubscribe link</h2>
+          <p>This link is missing its security token. Open the app and click Remove to disable reminders.</p>
+        </body>
+      </html>
+    `);
   }
-  // Note: in-app "Remove" button calls this without a token (user is authenticated by presence)
+
+  // Verify the HMAC token to prevent unauthorized unsubscribes
+  const expected = generateToken(email);
+  let valid = false;
+  try {
+    valid = timingSafeEqual(
+      Buffer.from(token, "hex"),
+      Buffer.from(expected, "hex")
+    );
+  } catch {
+    valid = false;
+  }
+
+  if (!valid) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>Invalid Link</title></head>
+        <body style="font-family:sans-serif;max-width:480px;margin:80px auto;padding:0 20px;text-align:center">
+          <h2>Invalid unsubscribe link</h2>
+          <p>This link has expired or is invalid. Open the app and click Remove to disable reminders.</p>
+        </body>
+      </html>
+    `);
+  }
 
   try {
     await redis.del(`subscriber:${email}`);
   } catch (err) {
     console.error("Redis delete error:", err.message);
-    // Still show success — worst case is the record was already gone
+    // Still show success — worst case the record was already gone
   }
 
   return res.status(200).send(`
